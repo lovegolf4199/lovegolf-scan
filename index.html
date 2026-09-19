@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="러브골프 스캔" />
+<meta name="theme-color" content="#1B4332" />
+<title>러브골프 재고 스캔</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #F2F4EE; --surface: #FFFFFF; --surface-alt: #E7ECE1;
+    --ink: #1F2318; --ink-soft: #5B6255;
+    --brand: #1B4332; --brand-2: #234B38; --brand-ink: #F4F1E7;
+    --accent: #B9922C; --accent-ink: #241D07;
+    --line: #D9DECD; --danger: #A84B2A; --danger-bg: #F5E1D6;
+    --ok: #2F6B45; --ok-bg: #E3EEE1;
+    --font-head: Georgia, 'Nanum Myeongjo', serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); display: flex; justify-content: center; min-height: 100vh; }
+  #app { width: 100%; max-width: 460px; min-height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+  header.top { background: linear-gradient(155deg, var(--brand) 0%, var(--brand-2) 100%); color: var(--brand-ink); padding: 20px 20px 16px; border-radius: 0 0 18px 18px; }
+  header.top .flag { font-size: 20px; opacity: .9; }
+  header.top h1 { font-family: var(--font-head); font-weight: 700; font-size: 20px; margin: 4px 0 10px; }
+  .staff-row { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: .92; }
+  .staff-row input { flex: 1; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); color: var(--brand-ink); padding: 7px 10px; border-radius: 8px; font-size: 13px; }
+  .staff-row input::placeholder { color: rgba(244,241,231,.6); }
+  .conn { font-size: 11px; margin-top: 8px; opacity: .8; }
+  .conn.bad { color: #F4C7B0; opacity: 1; font-weight: 700; }
+
+  main { flex: 1; padding: 16px 16px 100px; }
+  section.panel { display: none; }
+  section.panel.active { display: block; }
+  h2.panel-title { font-family: var(--font-head); font-weight: 700; font-size: 18px; margin: 4px 0 2px; }
+  p.panel-sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; line-height: 1.5; }
+
+  label.field { display: block; margin-bottom: 13px; }
+  label.field .lbl { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 5px; }
+  .opt { font-weight: 500; opacity: .8; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; font-family: var(--font-body); font-size: 15px; padding: 10px 12px;
+    border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 56px; }
+  .code-row { display: flex; gap: 8px; }
+  .code-row input { flex: 1; font-weight: 700; }
+
+  button { font-family: var(--font-body); cursor: pointer; border: none; }
+  .btn-primary { width: 100%; background: var(--brand); color: var(--brand-ink); font-weight: 700; font-size: 15px; padding: 12px; border-radius: 12px; margin-top: 4px; }
+  .btn-primary:disabled { opacity: .45; }
+  .btn-ghost { background: var(--surface-alt); color: var(--ink); font-weight: 600; font-size: 13.5px; padding: 10px 13px; border-radius: 10px; white-space: nowrap; }
+  .btn-scan { background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13.5px; padding: 10px 13px; border-radius: 10px; white-space: nowrap; }
+
+  .stub-card { background: var(--surface); border-radius: 12px; border-left: 5px solid var(--brand); padding: 13px 15px; margin: 4px 0 16px; }
+  .stub-card .name { font-family: var(--font-head); font-size: 16px; font-weight: 700; }
+  .stub-card .spec { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .stub-card .cat { display: inline-block; margin-top: 7px; font-size: 11px; font-weight: 700; color: var(--brand); background: var(--ok-bg); padding: 3px 9px; border-radius: 100px; }
+  .stub-card.not-found { border-left-color: var(--danger); }
+  .stub-card.not-found .name { color: var(--danger); font-size: 14px; font-family: var(--font-body); font-weight: 700; }
+
+  .chip-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .chip { flex: 1; text-align: center; padding: 8px 4px; border-radius: 100px; background: var(--surface-alt); color: var(--ink-soft); font-size: 12.5px; font-weight: 700; }
+  .chip.on { background: var(--brand); color: var(--brand-ink); }
+
+  .record { display: flex; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .record:last-child { border-bottom: none; }
+  .record .badge { flex-shrink: 0; width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .record.sale .badge { background: var(--ok-bg); }
+  .record.purchase .badge { background: var(--danger-bg); }
+  .record .body { flex: 1; min-width: 0; }
+  .record .row1 { display: flex; justify-content: space-between; gap: 8px; }
+  .record .title { font-weight: 700; font-size: 14px; }
+  .record .price { font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .record .sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+
+  .empty, .skeleton { text-align: center; color: var(--ink-soft); font-size: 13px; padding: 30px 10px; }
+
+  nav.tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 460px; background: var(--surface); border-top: 1px solid var(--line); display: flex; padding: 7px 6px calc(7px + env(safe-area-inset-bottom)); }
+  nav.tabbar button { flex: 1; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; color: var(--ink-soft); font-size: 11px; font-weight: 700; border-radius: 10px; }
+  nav.tabbar button .ic { font-size: 18px; }
+  nav.tabbar button.on { color: var(--brand); background: var(--surface-alt); }
+
+  .toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%) translateY(12px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 100px; font-size: 13px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 40; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .modal-veil { position: fixed; inset: 0; background: rgba(10,15,10,.86); display: none; align-items: center; justify-content: center; z-index: 50; padding: 18px; }
+  .modal-veil.show { display: flex; }
+  .cam-box { width: 100%; max-width: 380px; }
+  #camReader { border-radius: 14px; overflow: hidden; background: #000; }
+  .cam-close { margin-top: 12px; width: 100%; background: var(--surface); color: var(--ink); font-weight: 700; padding: 11px; border-radius: 12px; max-width: 380px; }
+
+  .setup-banner { background: var(--danger-bg); color: var(--danger); font-size: 12.5px; font-weight: 600; padding: 10px 14px; border-radius: 10px; margin: 12px 16px 0; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="setupBanner" class="setup-banner" style="display:none;">
+    아직 API_URL이 설정되지 않았어요. 이 파일 맨 아래 스크립트에서 API_URL 값을 배포한 Apps Script 웹 앱 주소로 바꿔주세요.
+  </div>
+
+  <header class="top">
+    <div class="flag">⛳</div>
+    <h1>러브골프 재고 스캔</h1>
+    <div class="staff-row">
+      담당자
+      <input type="text" id="staffName" placeholder="이름 입력" />
+    </div>
+    <div class="conn" id="connStatus"></div>
+  </header>
+
+  <main>
+    <!-- 판매 -->
+    <section class="panel active" data-panel="sale">
+      <h2 class="panel-title">판매 스캔</h2>
+      <p class="panel-sub">제품 코드를 스캔하거나 입력하면 제품명·스펙이 자동으로 채워져요.</p>
+      <label class="field">
+        <span class="lbl">제품 코드</span>
+        <div class="code-row">
+          <input type="text" id="saleCode" placeholder="예: TI-T100-7I" autocomplete="off" />
+          <button class="btn-scan" id="saleScanBtn">📷 스캔</button>
+        </div>
+      </label>
+      <div id="saleProductCard"></div>
+      <label class="field">
+        <span class="lbl">결제 금액</span>
+        <input type="number" id="salePrice" placeholder="예: 320000" inputmode="numeric" />
+      </label>
+      <label class="field">
+        <span class="lbl">결제 수단</span>
+        <select id="salePayment">
+          <option value="카드">카드</option><option value="현금">현금</option>
+          <option value="계좌이체">계좌이체</option><option value="기타">기타</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="lbl">고객 정보 <span class="opt">(선택)</span></span>
+        <input type="text" id="salePhone" placeholder="신규: 010-0000-0000 · 단골: 성함(뒷4자리)" />
+      </label>
+      <button class="btn-primary" id="saleSubmit">판매 기록 저장</button>
+    </section>
+
+    <!-- 매입 -->
+    <section class="panel" data-panel="purchase">
+      <h2 class="panel-title">매입 등록</h2>
+      <p class="panel-sub">그 자리에서 매입한 중고 클럽을 기록해요. 임시 코드가 자동으로 붙어요.</p>
+      <label class="field">
+        <span class="lbl">임시 코드</span>
+        <div class="code-row">
+          <input type="text" id="purchTemp" readonly />
+          <button class="btn-ghost" id="purchRegen">🔄 새 코드</button>
+        </div>
+      </label>
+      <label class="field"><span class="lbl">브랜드</span><input type="text" id="purchBrand" placeholder="예: 타이틀리스트" /></label>
+      <label class="field"><span class="lbl">모델명 / 스펙</span><input type="text" id="purchModel" placeholder="예: T100 7번 아이언, 스틸 R" /></label>
+      <label class="field">
+        <span class="lbl">상태</span>
+        <select id="purchCondition"><option value="상">상</option><option value="중">중</option><option value="하">하</option></select>
+      </label>
+      <label class="field"><span class="lbl">매입 금액</span><input type="number" id="purchPrice" placeholder="예: 150000" inputmode="numeric" /></label>
+      <label class="field">
+        <span class="lbl">고객 정보 <span class="opt">(선택)</span></span>
+        <input type="text" id="purchPhone" placeholder="신규: 010-0000-0000 · 단골: 성함(뒷4자리)" />
+      </label>
+      <label class="field"><span class="lbl">메모 <span class="opt">(선택)</span></span><textarea id="purchNote" placeholder="특이사항, 보관 위치 등"></textarea></label>
+      <button class="btn-primary" id="purchSubmit">매입 기록 저장</button>
+    </section>
+
+    <!-- 제품 -->
+    <section class="panel" data-panel="product">
+      <h2 class="panel-title">제품 등록</h2>
+      <p class="panel-sub">판매용 제품에 코드를 부여해요. 이미 있는 코드로 저장하면 내용이 갱신돼요.</p>
+      <label class="field"><span class="lbl">제품 코드</span><input type="text" id="prodCode" placeholder="바코드 라벨에 쓸 코드" autocomplete="off" /></label>
+      <label class="field"><span class="lbl">제품명</span><input type="text" id="prodName" placeholder="예: 타이틀리스트 T100" /></label>
+      <label class="field"><span class="lbl">스펙 <span class="opt">(선택)</span></span><input type="text" id="prodSpec" placeholder="예: 7번 아이언 · 스틸 R" /></label>
+      <label class="field">
+        <span class="lbl">분류</span>
+        <select id="prodCategory"><option value="클럽">클럽</option><option value="그립">그립</option><option value="커버">커버</option><option value="기타용품">기타용품</option></select>
+      </label>
+      <button class="btn-primary" id="prodSubmit">제품 저장</button>
+      <div style="margin-top:24px;">
+        <h2 class="panel-title" style="font-size:14.5px;">최근 등록한 제품</h2>
+        <div id="productList" class="skeleton">불러오는 중…</div>
+      </div>
+    </section>
+
+    <!-- 기록 -->
+    <section class="panel" data-panel="log">
+      <h2 class="panel-title">기록</h2>
+      <p class="panel-sub">최근 판매·매입 내역이에요.</p>
+      <div class="chip-row">
+        <button class="chip on" data-filter="all">전체</button>
+        <button class="chip" data-filter="sale">판매</button>
+        <button class="chip" data-filter="purchase">매입</button>
+      </div>
+      <div id="logList" class="skeleton">불러오는 중…</div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="sale" class="on"><span class="ic">🏷️</span>판매</button>
+    <button data-tab="purchase"><span class="ic">🤝</span>매입</button>
+    <button data-tab="product"><span class="ic">📦</span>제품</button>
+    <button data-tab="log"><span class="ic">📋</span>기록</button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="modal-veil" id="camVeil">
+    <div class="cam-box">
+      <div id="camReader"></div>
+      <button class="cam-close" id="camClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 여기만 바꾸면 됩니다 =====
+   Apps Script를 "웹 앱"으로 배포하고 나오는 URL을 아래에 붙여넣으세요.
+   예: https://script.google.com/macros/s/AKfycb.../exec               */
+const API_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+/* ================================ */
+
+(function () {
+  const $ = (sel) => document.querySelector(sel);
+  const $all = (sel) => Array.from(document.querySelectorAll(sel));
+  const configured = API_URL && API_URL.indexOf('https://script.google.com') === 0;
+  if (!configured) { $('#setupBanner').style.display = 'block'; }
+
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+  function won(n) { const num = Number(n); return isFinite(num) ? num.toLocaleString('ko-KR') + '원' : n; }
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ---- API: JSONP for reads, no-cors POST for writes ----
+  let jsonpN = 0;
+  function apiGet(action, params) {
+    return new Promise((resolve, reject) => {
+      if (!configured) return reject(new Error('not configured'));
+      const cbName = 'lg_cb_' + (jsonpN++) + '_' + Date.now();
+      const script = document.createElement('script');
+      const cleanup = () => { delete window[cbName]; script.remove(); };
+      window[cbName] = (data) => { resolve(data); cleanup(); };
+      const qs = new URLSearchParams(Object.assign({ action, callback: cbName }, params || {})).toString();
+      script.src = API_URL + '?' + qs;
+      script.onerror = () => { reject(new Error('요청 실패')); cleanup(); };
+      document.body.appendChild(script);
+      setTimeout(() => { if (window[cbName]) { reject(new Error('시간 초과')); cleanup(); } }, 9000);
+    });
+  }
+  async function apiPost(action, payload) {
+    if (!configured) throw new Error('not configured');
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, payload })
+    });
+    return { ok: true };
+  }
+
+  // connection check
+  if (configured) {
+    apiGet('listProducts').then(() => { $('#connStatus').textContent = '시트 연결됨'; })
+      .catch(() => { $('#connStatus').textContent = '시트 연결 확인 필요'; $('#connStatus').classList.add('bad'); });
+  }
+
+  // ---- staff name ----
+  const staffInput = $('#staffName');
+  staffInput.value = localStorage.getItem('lg_staff_name') || '';
+  staffInput.addEventListener('change', () => localStorage.setItem('lg_staff_name', staffInput.value.trim()));
+  function staffName() { return localStorage.getItem('lg_staff_name') || staffInput.value.trim(); }
+
+  // ---- tabs ----
+  function showTab(name) {
+    $all('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === name));
+    $all('nav.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+    if (name === 'log') loadLog();
+    if (name === 'product') loadProductList();
+  }
+  $all('nav.tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  // ---- product lookup ----
+  let currentProduct = null, lookupTimer;
+  async function lookupProduct(code) {
+    const card = $('#saleProductCard');
+    if (!code) { card.innerHTML = ''; currentProduct = null; return; }
+    card.innerHTML = '<div class="skeleton">확인 중…</div>';
+    try {
+      const p = await apiGet('getProduct', { code });
+      if (p && p.name) {
+        currentProduct = p;
+        card.innerHTML = '<div class="stub-card"><div class="name">' + escapeHtml(p.name) + '</div>' +
+          (p.spec ? '<div class="spec">' + escapeHtml(p.spec) + '</div>' : '') +
+          (p.category ? '<span class="cat">' + escapeHtml(p.category) + '</span>' : '') + '</div>';
+      } else {
+        currentProduct = null;
+        card.innerHTML = '<div class="stub-card not-found"><div class="name">등록되지 않은 코드예요</div>' +
+          '<div class="spec">제품 탭에서 이 코드를 먼저 등록해주세요.</div></div>';
+      }
+    } catch (e) { card.innerHTML = '<div class="stub-card not-found"><div class="name">확인하지 못했어요</div></div>'; }
+  }
+  $('#saleCode').addEventListener('input', (e) => {
+    clearTimeout(lookupTimer);
+    const v = e.target.value.trim();
+    lookupTimer = setTimeout(() => lookupProduct(v), 350);
+  });
+
+  // ---- sale submit ----
+  $('#saleSubmit').addEventListener('click', async () => {
+    const code = $('#saleCode').value.trim();
+    const price = $('#salePrice').value.trim();
+    if (!code) return toast('제품 코드를 입력해주세요');
+    if (!currentProduct) return toast('등록된 제품 코드가 아니에요');
+    if (!price) return toast('결제 금액을 입력해주세요');
+    const btn = $('#saleSubmit'); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      await apiPost('saveSale', {
+        code, name: currentProduct.name, spec: currentProduct.spec, price,
+        payment: $('#salePayment').value, customer: $('#salePhone').value.trim(), staff: staffName()
+      });
+      toast('판매 기록을 저장했어요');
+      $('#saleCode').value = ''; $('#salePrice').value = ''; $('#salePhone').value = '';
+      $('#saleProductCard').innerHTML = ''; currentProduct = null;
+    } catch (e) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+    finally { btn.disabled = false; btn.textContent = '판매 기록 저장'; }
+  });
+
+  // ---- purchase ----
+  function genTempCode() { return '매입-' + Math.floor(100000 + Math.random() * 899999); }
+  $('#purchTemp').value = genTempCode();
+  $('#purchRegen').addEventListener('click', () => { $('#purchTemp').value = genTempCode(); });
+
+  $('#purchSubmit').addEventListener('click', async () => {
+    const brand = $('#purchBrand').value.trim(), model = $('#purchModel').value.trim(), price = $('#purchPrice').value.trim();
+    if (!brand || !model) return toast('브랜드와 모델명을 입력해주세요');
+    if (!price) return toast('매입 금액을 입력해주세요');
+    const btn = $('#purchSubmit'); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      await apiPost('savePurchase', {
+        tempCode: $('#purchTemp').value, brand, model, condition: $('#purchCondition').value, price,
+        customer: $('#purchPhone').value.trim(), note: $('#purchNote').value.trim(), staff: staffName()
+      });
+      toast('매입 기록을 저장했어요');
+      $('#purchTemp').value = genTempCode();
+      $('#purchBrand').value = ''; $('#purchModel').value = ''; $('#purchPrice').value = '';
+      $('#purchPhone').value = ''; $('#purchNote').value = '';
+    } catch (e) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+    finally { btn.disabled = false; btn.textContent = '매입 기록 저장'; }
+  });
+
+  // ---- product register ----
+  $('#prodSubmit').addEventListener('click', async () => {
+    const code = $('#prodCode').value.trim(), name = $('#prodName').value.trim();
+    if (!code || !name) return toast('제품 코드와 제품명을 입력해주세요');
+    const btn = $('#prodSubmit'); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      await apiPost('addProduct', { code, name, spec: $('#prodSpec').value.trim(), category: $('#prodCategory').value });
+      toast('제품을 저장했어요');
+      $('#prodCode').value = ''; $('#prodName').value = ''; $('#prodSpec').value = '';
+      loadProductList();
+    } catch (e) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+    finally { btn.disabled = false; btn.textContent = '제품 저장'; }
+  });
+  async function loadProductList() {
+    const el = $('#productList'); el.innerHTML = '<div class="skeleton">불러오는 중…</div>';
+    try {
+      const rows = await apiGet('listProducts');
+      if (!rows || !rows.length) { el.innerHTML = '<div class="empty">아직 등록된 제품이 없어요</div>'; return; }
+      el.innerHTML = rows.map(p => '<div class="record"><div class="badge">🏷️</div><div class="body">' +
+        '<div class="row1"><div class="title">' + escapeHtml(p.name) + '</div></div>' +
+        '<div class="sub">' + escapeHtml(p.code) + (p.spec ? ' · ' + escapeHtml(p.spec) : '') + '</div></div></div>').join('');
+    } catch (e) { el.innerHTML = '<div class="empty">불러오지 못했어요</div>'; }
+  }
+
+  // ---- log ----
+  let logFilter = 'all', lastLogs = [];
+  $all('.chip').forEach(c => c.addEventListener('click', () => {
+    logFilter = c.dataset.filter; $all('.chip').forEach(x => x.classList.toggle('on', x === c)); renderLog();
+  }));
+  async function loadLog() {
+    const el = $('#logList'); el.innerHTML = '<div class="skeleton">불러오는 중…</div>';
+    try { lastLogs = await apiGet('getRecentLogs') || []; renderLog(); }
+    catch (e) { el.innerHTML = '<div class="empty">불러오지 못했어요</div>'; }
+  }
+  function renderLog() {
+    const el = $('#logList');
+    let items = logFilter === 'all' ? lastLogs : lastLogs.filter(i => i.kind === logFilter);
+    if (!items.length) { el.innerHTML = '<div class="empty">표시할 기록이 없어요</div>'; return; }
+    el.innerHTML = items.map(i => {
+      const isSale = i.kind === 'sale';
+      const title = isSale ? (i.name || i.code) : (i.brand + ' ' + i.model);
+      const sub = (isSale ? (i.spec || i.code) : (i.condition + ' · ' + i.tempCode)) +
+        ' · ' + (i.staff || '담당자 미확인') + ' · ' + i.time;
+      return '<div class="record ' + i.kind + '"><div class="badge">' + (isSale ? '💳' : '🤝') + '</div>' +
+        '<div class="body"><div class="row1"><div class="title">' + escapeHtml(title) + '</div>' +
+        '<div class="price">' + won(i.price) + '</div></div><div class="sub">' + escapeHtml(sub) + '</div></div></div>';
+    }).join('');
+  }
+
+  // ---- camera scan (html5-qrcode) — runs fine here, no Apps Script iframe involved ----
+  let html5QrCode = null;
+  $('#saleScanBtn').addEventListener('click', async () => {
+    $('#camVeil').classList.add('show');
+    try {
+      html5QrCode = new Html5Qrcode('camReader', {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      });
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 150 } },
+        (decodedText) => {
+          closeCam();
+          $('#saleCode').value = decodedText;
+          lookupProduct(decodedText);
+          toast('스캔했어요');
+        },
+        () => {}
+      );
+    } catch (e) {
+      toast('카메라를 열 수 없어요. 코드를 직접 입력해주세요');
+      closeCam();
+    }
+  });
+  function closeCam() {
+    $('#camVeil').classList.remove('show');
+    if (html5QrCode) { html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => {}); html5QrCode = null; }
+  }
+  $('#camClose').addEventListener('click', closeCam);
+
+})();
+</script>
+</body>
+</html>
