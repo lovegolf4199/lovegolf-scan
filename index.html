@@ -298,7 +298,7 @@
 /* ===== 여기만 바꾸면 됩니다 =====
    Apps Script를 "웹 앱"으로 배포하고 나오는 URL을 아래에 붙여넣으세요.
    예: https://script.google.com/macros/s/AKfycb.../exec               */
-const API_URL = 'https://script.google.com/macros/s/AKfycbze-PIXCHbvoWqnBvGeo_F6ETTbvw1XiYUb87l7oVyx_IQENgiOZmKcY80Da23qiO8XaA/exec';
+const API_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
 /* ================================ */
 
 (function () {
@@ -645,6 +645,16 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbze-PIXCHbvoWqnBvGeo_F6
     $('#camVeil').classList.add('show');
     startCam();
   }
+  function onScanSuccess(decodedText) {
+    closeCam();
+    if (scanTargetInput) { scanTargetInput.value = decodedText; }
+    toast('스캔했어요');
+    if (scanTargetLookup) {
+      Promise.resolve(scanTargetLookup(decodedText)).then(() => {
+        if (scanAfterLookup) scanAfterLookup();
+      });
+    }
+  }
   async function startCam() {
     try {
       html5QrCode = new Html5Qrcode('camReader', {
@@ -654,21 +664,27 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbze-PIXCHbvoWqnBvGeo_F6
           Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.QR_CODE
         ]
       });
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 150 } },
-        (decodedText) => {
-          closeCam();
-          if (scanTargetInput) { scanTargetInput.value = decodedText; }
-          toast('스캔했어요');
-          if (scanTargetLookup) {
-            Promise.resolve(scanTargetLookup(decodedText)).then(() => {
-              if (scanAfterLookup) scanAfterLookup();
-            });
-          }
-        },
-        () => {}
-      );
+      const cameraConfig = {
+        facingMode: 'environment',
+        advanced: [{ focusMode: 'continuous' }],
+        focusMode: 'continuous'
+      };
+      try {
+        await html5QrCode.start(
+          cameraConfig,
+          { fps: 10, qrbox: { width: 240, height: 150 } },
+          onScanSuccess,
+          () => {}
+        );
+      } catch (focusErr) {
+        // 일부 기기는 focusMode 제약을 거부하므로, 그럴 땐 기본 방식으로 다시 시도
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 240, height: 150 } },
+          onScanSuccess,
+          () => {}
+        );
+      }
     } catch (e) {
       toast('카메라를 열 수 없어요. 코드를 직접 입력해주세요');
       closeCam();
