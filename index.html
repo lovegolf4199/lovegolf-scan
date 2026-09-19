@@ -219,10 +219,10 @@
       <button class="btn-primary" id="purchSubmit">매입 기록 저장</button>
     </section>
 
-    <!-- 출고/입고 -->
+    <!-- 입출고 -->
     <section class="panel" data-panel="outbound">
-      <h2 class="panel-title">출고 · 입고 (거래처)</h2>
-      <p class="panel-sub">친한 매장에 재고를 빌려줄 때(출고), 또는 다른 매장에서 재고를 받아올 때(입고). 하나씩 담고 마지막에 거래처와 정산상태를 입력하세요.</p>
+      <h2 class="panel-title">입출고 (거래처)</h2>
+      <p class="panel-sub">친한 매장에 재고를 빌려줄 때(출고), 또는 다른 매장에서 재고를 받아올 때(입고). 하나씩 담고 마지막에 거래처를 입력하세요.</p>
       <label class="field">
         <span class="lbl">구분</span>
         <select id="outDirection">
@@ -250,12 +250,8 @@
 
       <h3 class="sub-title">거래 정보</h3>
       <label class="field"><span class="lbl">거래처 (매장/업체명)</span><input type="text" id="outDest" placeholder="예: 그린힐 골프샵" /></label>
-      <label class="field">
-        <span class="lbl">정산 상태</span>
-        <select id="outStatus"><option value="미정산">미정산</option><option value="정산완료">정산완료</option></select>
-      </label>
       <label class="field"><span class="lbl">메모 <span class="opt">(선택, 계산서 누락 등 특이사항)</span></span><textarea id="outNote" placeholder="특이사항"></textarea></label>
-      <button class="btn-primary" id="outSubmit">출고·입고 완료</button>
+      <button class="btn-primary" id="outSubmit">입출고 완료</button>
     </section>
 
     <!-- 재고확인 -->
@@ -332,7 +328,7 @@
   <nav class="tabbar">
     <button data-tab="sale" class="on"><span class="ic">🏷️</span>판매</button>
     <button data-tab="purchase"><span class="ic">🤝</span>매입</button>
-    <button data-tab="outbound"><span class="ic">📤</span>출입고</button>
+    <button data-tab="outbound"><span class="ic">📤</span>입출고</button>
     <button data-tab="inventory"><span class="ic">🔍</span>재고</button>
     <button data-tab="log"><span class="ic">📋</span>기록</button>
   </nav>
@@ -701,12 +697,12 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
     if (!dest) return toast('거래처를 입력해주세요');
     const btn = $('#outSubmit'); btn.disabled = true; btn.textContent = '처리 중…';
     try {
-      await apiPost('finalizeOutboundBundle', { bundleId: outBundleId, dest, status: $('#outStatus').value, note: $('#outNote').value.trim() });
+      await apiPost('finalizeOutboundBundle', { bundleId: outBundleId, dest, note: $('#outNote').value.trim() });
       toast('처리 완료했어요 (' + outCart.length + '개 상품)');
       outCart = []; outBundleId = null; renderOutCart();
       $('#outDest').value = ''; $('#outNote').value = '';
     } catch (e) { toast('저장하지 못했어요. 다시 시도해주세요'); }
-    finally { btn.disabled = false; btn.textContent = '출고·입고 완료'; }
+    finally { btn.disabled = false; btn.textContent = '입출고 완료'; }
   });
 
   /* ============ 재고확인 ============ */
@@ -833,7 +829,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       const dirIcon = i.direction === '입고' ? '📥' : '📤';
       const title = (names.length > 1 ? (names[0] + ' 외 ' + (names.length - 1) + '건') : names[0]) + ' (' + dirLabel + ')';
       const pending = i.status === '대기';
-      const sub = [names.length > 1 ? names.join(', ') : null, i.dest, i.status2, pending ? '⏳ 진행중' : null,
+      const sub = [names.length > 1 ? names.join(', ') : null, i.dest, pending ? '⏳ 진행중' : null,
         (i.staff || '담당자 미확인'), i.time].filter(Boolean).join(' · ');
       return '<div class="record outbound"><div class="badge">' + dirIcon + '</div><div class="body">' +
         '<div class="row1"><div class="title">' + escapeHtml(title) + '</div></div>' +
