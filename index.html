@@ -125,6 +125,13 @@
   .detail-row span:first-child { color: var(--ink-soft); }
   .detail-row span:last-child { font-weight: 600; text-align: right; }
   .detail-close { margin-top: 14px; width: 100%; background: var(--surface-alt); color: var(--ink); font-weight: 700; padding: 12px; border-radius: 12px; }
+  .detail-edit-btn { margin-top: 10px; width: 100%; background: var(--accent); color: var(--accent-ink); font-weight: 700; padding: 12px; border-radius: 12px; }
+  .edit-item { border: 1.5px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .edit-item .edit-row2 { display: flex; gap: 8px; margin-top: 8px; }
+  .edit-item input { margin-bottom: 8px; }
+  .edit-item input:last-child { margin-bottom: 0; }
+  .edit-del-btn { color: var(--danger); font-weight: 700; font-size: 12px; margin-top: 8px; display: inline-block; }
+  .detail-save { width: 100%; background: var(--brand); color: var(--brand-ink); font-weight: 700; padding: 13px; border-radius: 12px; margin-top: 6px; }
   .cam-box { width: 100%; max-width: 380px; }
   #camReader { border-radius: 14px; overflow: hidden; background: #000; }
   .cam-close { margin-top: 12px; width: 100%; background: var(--surface); color: var(--ink); font-weight: 700; padding: 11px; border-radius: 12px; max-width: 380px; }
@@ -861,13 +868,16 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
     }));
   }
 
+  let currentDetailItem = null;
   function openDetail(i) {
+    currentDetailItem = i;
     let html = '';
     if (i.kind === 'sale') {
       html += '<h3>판매 상세</h3>';
       (i.itemDetails || (i.items || []).map(n => ({ name: n }))).forEach(d => {
-        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + (d.qty > 1 ? ' ×' + d.qty : '') + '</div>' +
-          (d.spec ? '<div class="s">' + escapeHtml(d.spec) + '</div>' : '') + '</div>' +
+        const specLine = [d.spec, '수량 ' + (d.qty || 1)].filter(Boolean).join(' · ');
+        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + '</div>' +
+          '<div class="s">' + escapeHtml(specLine) + '</div></div>' +
           '<div>' + (d.price != null ? won(d.price) : '') + '</div></div>';
       });
       html += '<div class="detail-row"><span>총 결제금액</span><span>' + (i.status === '대기' ? '결제대기중' : won(i.price)) + '</span></div>';
@@ -877,6 +887,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       if (i.note) html += '<div class="detail-row"><span>비고</span><span>' + escapeHtml(i.note) + '</span></div>';
       html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
       html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+      html += '<button class="detail-edit-btn" id="detailEditBtn">수정</button>';
     } else if (i.kind === 'purchase') {
       html += '<h3>매입 상세</h3>';
       html += '<div class="detail-item"><div><div class="n">' + escapeHtml(i.brand + ' ' + i.model) + '</div>' +
@@ -897,8 +908,9 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
     } else {
       html += '<h3>' + (i.direction === '입고' ? '입고' : '출고') + ' 상세</h3>';
       (i.itemDetails || (i.items || []).map(n => ({ name: n }))).forEach(d => {
-        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + (d.qty > 1 ? ' ×' + d.qty : '') + '</div>' +
-          (d.spec ? '<div class="s">' + escapeHtml(d.spec) + '</div>' : '') + '</div><div></div></div>';
+        const specLine = [d.spec, '수량 ' + (d.qty || 1)].filter(Boolean).join(' · ');
+        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + '</div>' +
+          '<div class="s">' + escapeHtml(specLine) + '</div></div><div></div></div>';
       });
       html += '<div class="detail-row"><span>거래처</span><span>' + escapeHtml(i.dest || '-') + '</span></div>';
       if (i.note) html += '<div class="detail-row"><span>메모</span><span>' + escapeHtml(i.note) + '</span></div>';
@@ -909,8 +921,72 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
     $('#detailCard').innerHTML = html;
     $('#detailVeil').classList.add('show');
     $('#detailClose').addEventListener('click', closeDetail);
+    if (i.kind === 'sale') $('#detailEditBtn').addEventListener('click', () => openEditSale(i));
   }
   function closeDetail() { $('#detailVeil').classList.remove('show'); }
+
+  function openEditSale(i) {
+    const details = i.itemDetails || [];
+    let html = '<h3>판매 수정</h3>';
+    details.forEach((d, di) => {
+      html += '<div class="edit-item" data-item-id="' + escapeHtml(d.itemId || '') + '">' +
+        '<input type="text" class="edit-name" placeholder="품명" value="' + escapeHtml(d.name || '') + '" />' +
+        '<input type="text" class="edit-spec" placeholder="스펙(선택)" value="' + escapeHtml(d.spec || '') + '" />' +
+        '<div class="edit-row2">' +
+          '<input type="number" class="edit-qty" placeholder="수량" value="' + (d.qty || 1) + '" inputmode="numeric" />' +
+          '<input type="number" class="edit-price" placeholder="이 줄 금액" value="' + (d.price != null ? d.price : '') + '" inputmode="numeric" />' +
+        '</div>' +
+        '<button class="edit-del-btn" data-del-idx="' + di + '">이 항목 삭제</button>' +
+      '</div>';
+    });
+    html += '<label class="field"><span class="lbl">고객 정보</span><input type="text" id="editCustomer" value="' + escapeHtml(i.customer || '') + '" /></label>';
+    html += '<label class="field"><span class="lbl">결제 수단</span><select id="editPayment">' +
+      ['카드', '현금', '기손', '기하', '법인(계산서)', '외상', '러브상품권', '기타상품권'].map(p =>
+        '<option value="' + p + '"' + (i.payment === p ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></label>';
+    html += '<label class="field"><span class="lbl">서비스 품목</span><input type="text" id="editService" value="' + escapeHtml(i.service || '') + '" /></label>';
+    html += '<label class="field"><span class="lbl">비고</span><input type="text" id="editNote" value="' + escapeHtml(i.note || '') + '" /></label>';
+    html += '<button class="detail-save" id="editSaveBtn">저장</button>';
+    html += '<button class="detail-close" id="editCancelBtn">취소</button>';
+    $('#detailCard').innerHTML = html;
+
+    $all('.edit-del-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+      const wrap = e.currentTarget.closest('.edit-item');
+      const itemId = wrap.getAttribute('data-item-id');
+      if (!itemId) { wrap.remove(); return; }
+      try { await apiPost('deleteSaleItem', { itemId }); toast('항목을 삭제했어요 (재고 복구됨)'); }
+      catch (err) { toast('삭제 실패'); }
+      wrap.remove();
+    }));
+
+    $('#editCancelBtn').addEventListener('click', () => openDetail(i));
+
+    $('#editSaveBtn').addEventListener('click', async () => {
+      const btn = $('#editSaveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
+      try {
+        const itemWraps = $all('.edit-item');
+        for (const wrap of itemWraps) {
+          const itemId = wrap.getAttribute('data-item-id');
+          if (!itemId) continue;
+          const name = wrap.querySelector('.edit-name').value.trim();
+          const spec = wrap.querySelector('.edit-spec').value.trim();
+          const qty = Number(wrap.querySelector('.edit-qty').value) || 1;
+          const price = Number(wrap.querySelector('.edit-price').value) || 0;
+          await apiPost('editSaleItem', { itemId, name, spec, qty, price });
+        }
+        await apiPost('editSaleBundleInfo', {
+          bundleId: i.bundleId,
+          customer: $('#editCustomer').value.trim(),
+          payment: $('#editPayment').value,
+          service: $('#editService').value.trim(),
+          note: $('#editNote').value.trim()
+        });
+        toast('수정했어요');
+        closeDetail();
+        loadLog();
+      } catch (e2) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+      finally { btn.disabled = false; btn.textContent = '저장'; }
+    });
+  }
   $('#detailVeil').addEventListener('click', (e) => { if (e.target.id === 'detailVeil') closeDetail(); });
 
   /* ============ 카메라 스캔 ============ */
