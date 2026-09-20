@@ -905,6 +905,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       if (i.note) html += '<div class="detail-row"><span>비고</span><span>' + escapeHtml(i.note) + '</span></div>';
       html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
       html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+      html += '<button class="detail-edit-btn" id="detailEditBtn">수정</button>';
     } else {
       html += '<h3>' + (i.direction === '입고' ? '입고' : '출고') + ' 상세</h3>';
       (i.itemDetails || (i.items || []).map(n => ({ name: n }))).forEach(d => {
@@ -916,12 +917,15 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       if (i.note) html += '<div class="detail-row"><span>메모</span><span>' + escapeHtml(i.note) + '</span></div>';
       html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
       html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+      html += '<button class="detail-edit-btn" id="detailEditBtn">수정</button>';
     }
     html += '<button class="detail-close" id="detailClose">닫기</button>';
     $('#detailCard').innerHTML = html;
     $('#detailVeil').classList.add('show');
     $('#detailClose').addEventListener('click', closeDetail);
     if (i.kind === 'sale') $('#detailEditBtn').addEventListener('click', () => openEditSale(i));
+    else if (i.kind === 'repay') $('#detailEditBtn').addEventListener('click', () => openEditRepay(i));
+    else if (i.kind === 'outbound') $('#detailEditBtn').addEventListener('click', () => openEditOutbound(i));
   }
   function closeDetail() { $('#detailVeil').classList.remove('show'); }
 
@@ -979,6 +983,93 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
           payment: $('#editPayment').value,
           service: $('#editService').value.trim(),
           note: $('#editNote').value.trim()
+        });
+        toast('수정했어요');
+        closeDetail();
+        loadLog();
+      } catch (e2) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+      finally { btn.disabled = false; btn.textContent = '저장'; }
+    });
+  }
+
+  function openEditOutbound(i) {
+    const details = i.itemDetails || [];
+    let html = '<h3>' + (i.direction === '입고' ? '입고' : '출고') + ' 수정</h3>';
+    details.forEach((d, di) => {
+      html += '<div class="edit-item" data-item-id="' + escapeHtml(d.itemId || '') + '">' +
+        '<input type="text" class="edit-name" placeholder="품명" value="' + escapeHtml(d.name || '') + '" />' +
+        '<input type="text" class="edit-spec" placeholder="스펙(선택)" value="' + escapeHtml(d.spec || '') + '" />' +
+        '<input type="number" class="edit-qty" placeholder="수량" value="' + (d.qty || 1) + '" inputmode="numeric" />' +
+        '<button class="edit-del-btn" data-del-idx="' + di + '">이 항목 삭제</button>' +
+      '</div>';
+    });
+    html += '<label class="field"><span class="lbl">거래처</span><input type="text" id="editDest" value="' + escapeHtml(i.dest || '') + '" /></label>';
+    html += '<label class="field"><span class="lbl">메모</span><input type="text" id="editOutNote" value="' + escapeHtml(i.note || '') + '" /></label>';
+    html += '<button class="detail-save" id="editSaveBtn">저장</button>';
+    html += '<button class="detail-close" id="editCancelBtn">취소</button>';
+    $('#detailCard').innerHTML = html;
+
+    $all('.edit-del-btn').forEach(btn => btn.addEventListener('click', async (e) => {
+      const wrap = e.currentTarget.closest('.edit-item');
+      const itemId = wrap.getAttribute('data-item-id');
+      if (!itemId) { wrap.remove(); return; }
+      try { await apiPost('deleteOutboundItem', { itemId }); toast('항목을 삭제했어요 (재고 복구됨)'); }
+      catch (err) { toast('삭제 실패'); }
+      wrap.remove();
+    }));
+
+    $('#editCancelBtn').addEventListener('click', () => openDetail(i));
+
+    $('#editSaveBtn').addEventListener('click', async () => {
+      const btn = $('#editSaveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
+      try {
+        const itemWraps = $all('.edit-item');
+        for (const wrap of itemWraps) {
+          const itemId = wrap.getAttribute('data-item-id');
+          if (!itemId) continue;
+          const name = wrap.querySelector('.edit-name').value.trim();
+          const spec = wrap.querySelector('.edit-spec').value.trim();
+          const qty = Number(wrap.querySelector('.edit-qty').value) || 1;
+          await apiPost('editOutboundItem', { itemId, name, spec, qty });
+        }
+        await apiPost('editOutboundBundleInfo', {
+          bundleId: i.bundleId, dest: $('#editDest').value.trim(), note: $('#editOutNote').value.trim()
+        });
+        toast('수정했어요');
+        closeDetail();
+        loadLog();
+      } catch (e2) { toast('저장하지 못했어요. 다시 시도해주세요'); }
+      finally { btn.disabled = false; btn.textContent = '저장'; }
+    });
+  }
+
+  function openEditRepay(i) {
+    let html = '<h3>미수금 입금 수정</h3>';
+    html += '<label class="field"><span class="lbl">고객명 / 거래처</span><input type="text" id="editRepayCustomer" value="' + escapeHtml(i.customer || '') + '" /></label>';
+    html += '<label class="field"><span class="lbl">입금액</span><input type="number" id="editRepayAmount" value="' + (i.amount || 0) + '" inputmode="numeric" /></label>';
+    html += '<label class="field"><span class="lbl">입금 수단</span><select id="editRepayPayment">' +
+      ['카드', '현금', '기손', '기하', '법인(계산서)', '러브상품권', '기타상품권'].map(p =>
+        '<option value="' + p + '"' + (i.payment === p ? ' selected' : '') + '>' + p + '</option>').join('') + '</select></label>';
+    html += '<label class="field"><span class="lbl">비고</span><input type="text" id="editRepayNote" value="' + escapeHtml(i.note || '') + '" /></label>';
+    html += '<button class="detail-save" id="editSaveBtn">저장</button>';
+    html += '<button class="btn-mini edit-del-btn" id="repayDeleteBtn" style="display:block;margin-top:10px;">이 기록 삭제</button>';
+    html += '<button class="detail-close" id="editCancelBtn">취소</button>';
+    $('#detailCard').innerHTML = html;
+
+    $('#editCancelBtn').addEventListener('click', () => openDetail(i));
+    $('#repayDeleteBtn').addEventListener('click', async () => {
+      try { await apiPost('deleteRepayment', { itemId: i.itemId }); toast('삭제했어요'); closeDetail(); loadLog(); }
+      catch (e2) { toast('삭제하지 못했어요'); }
+    });
+    $('#editSaveBtn').addEventListener('click', async () => {
+      const btn = $('#editSaveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
+      try {
+        await apiPost('editRepayment', {
+          itemId: i.itemId,
+          customer: $('#editRepayCustomer').value.trim(),
+          amount: $('#editRepayAmount').value.trim(),
+          payment: $('#editRepayPayment').value,
+          note: $('#editRepayNote').value.trim()
         });
         toast('수정했어요');
         closeDetail();
