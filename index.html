@@ -110,6 +110,21 @@
 
   .modal-veil { position: fixed; inset: 0; background: rgba(10,15,10,.86); display: none; align-items: center; justify-content: center; z-index: 50; padding: 18px; }
   .modal-veil.show { display: flex; }
+
+  .record { cursor: pointer; }
+  .record:active { background: var(--surface-alt); }
+  .detail-veil { position: fixed; inset: 0; background: rgba(10,15,10,.5); display: none; align-items: flex-end; justify-content: center; z-index: 55; }
+  .detail-veil.show { display: flex; }
+  .detail-card { width: 100%; max-width: 460px; max-height: 78vh; overflow-y: auto; background: var(--surface); border-radius: 18px 18px 0 0; padding: 20px 18px calc(16px + env(safe-area-inset-bottom)); }
+  .detail-card h3 { font-family: var(--font-head); font-weight: 700; font-size: 17px; margin: 0 0 12px; }
+  .detail-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .detail-item:last-of-type { border-bottom: 1px solid var(--line); }
+  .detail-item .n { font-weight: 700; }
+  .detail-item .s { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13px; }
+  .detail-row span:first-child { color: var(--ink-soft); }
+  .detail-row span:last-child { font-weight: 600; text-align: right; }
+  .detail-close { margin-top: 14px; width: 100%; background: var(--surface-alt); color: var(--ink); font-weight: 700; padding: 12px; border-radius: 12px; }
   .cam-box { width: 100%; max-width: 380px; }
   #camReader { border-radius: 14px; overflow: hidden; background: #000; }
   .cam-close { margin-top: 12px; width: 100%; background: var(--surface); color: var(--ink); font-weight: 700; padding: 11px; border-radius: 12px; max-width: 380px; }
@@ -340,6 +355,10 @@
       <div id="camReader"></div>
       <button class="cam-close" id="camClose">닫기</button>
     </div>
+  </div>
+
+  <div class="detail-veil" id="detailVeil">
+    <div class="detail-card" id="detailCard"></div>
   </div>
 </div>
 
@@ -795,7 +814,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
     if (logFilter !== 'all') items = items.filter(i => i.kind === logFilter);
     if (!items.length) { el.innerHTML = '<div class="empty">표시할 기록이 없어요</div>'; return; }
 
-    el.innerHTML = items.map(i => {
+    el.innerHTML = items.map((i, idx) => {
       if (i.kind === 'sale') {
         const names = i.items || [i.name || i.code];
         const title = names.length > 1 ? (names[0] + ' 외 ' + (names.length - 1) + '건') : names[0];
@@ -805,7 +824,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
           i.service ? '서비스: ' + i.service : null, i.note || null,
           (i.staff || '담당자 미확인'), i.time];
         const sub = subParts.filter(Boolean).join(' · ');
-        return '<div class="record sale"><div class="badge">💳</div><div class="body">' +
+        return '<div class="record sale" data-idx="' + idx + '"><div class="badge">💳</div><div class="body">' +
           '<div class="row1"><div class="title">' + escapeHtml(title) + '</div>' +
           '<div class="price">' + (pending ? '-' : won(i.price)) + '</div></div>' +
           '<div class="sub">' + escapeHtml(sub) + '</div></div></div>';
@@ -813,13 +832,13 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       if (i.kind === 'purchase') {
         const sub = i.condition + ' · ' + i.tempCode + (i.customer ? ' · ' + i.customer : '') +
           (i.note ? ' · ' + i.note : '') + ' · ' + (i.staff || '담당자 미확인') + ' · ' + i.time;
-        return '<div class="record purchase"><div class="badge">🤝</div><div class="body">' +
+        return '<div class="record purchase" data-idx="' + idx + '"><div class="badge">🤝</div><div class="body">' +
           '<div class="row1"><div class="title">' + escapeHtml(i.brand + ' ' + i.model) + '</div>' +
           '<div class="price">' + won(i.price) + '</div></div><div class="sub">' + escapeHtml(sub) + '</div></div></div>';
       }
       if (i.kind === 'repay') {
         const sub = [i.payment, i.note || null, (i.staff || '담당자 미확인'), i.time].filter(Boolean).join(' · ');
-        return '<div class="record sale"><div class="badge">💰</div><div class="body">' +
+        return '<div class="record sale" data-idx="' + idx + '"><div class="badge">💰</div><div class="body">' +
           '<div class="row1"><div class="title">' + escapeHtml(i.customer) + ' 입금</div>' +
           '<div class="price">' + won(i.amount) + '</div></div><div class="sub">' + escapeHtml(sub) + '</div></div></div>';
       }
@@ -831,11 +850,68 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhEEJ5L8rFGi-UxctdVAQH
       const pending = i.status === '대기';
       const sub = [names.length > 1 ? names.join(', ') : null, i.dest, pending ? '⏳ 진행중' : null,
         (i.staff || '담당자 미확인'), i.time].filter(Boolean).join(' · ');
-      return '<div class="record outbound"><div class="badge">' + dirIcon + '</div><div class="body">' +
+      return '<div class="record outbound" data-idx="' + idx + '"><div class="badge">' + dirIcon + '</div><div class="body">' +
         '<div class="row1"><div class="title">' + escapeHtml(title) + '</div></div>' +
         '<div class="sub">' + escapeHtml(sub) + '</div></div></div>';
     }).join('');
+
+    $all('.record[data-idx]').forEach(elx => elx.addEventListener('click', () => {
+      const idx = Number(elx.getAttribute('data-idx'));
+      openDetail(items[idx]);
+    }));
   }
+
+  function openDetail(i) {
+    let html = '';
+    if (i.kind === 'sale') {
+      html += '<h3>판매 상세</h3>';
+      (i.itemDetails || (i.items || []).map(n => ({ name: n }))).forEach(d => {
+        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + (d.qty > 1 ? ' ×' + d.qty : '') + '</div>' +
+          (d.spec ? '<div class="s">' + escapeHtml(d.spec) + '</div>' : '') + '</div>' +
+          '<div>' + (d.price != null ? won(d.price) : '') + '</div></div>';
+      });
+      html += '<div class="detail-row"><span>총 결제금액</span><span>' + (i.status === '대기' ? '결제대기중' : won(i.price)) + '</span></div>';
+      html += '<div class="detail-row"><span>결제수단</span><span>' + escapeHtml(i.payment || '-') + '</span></div>';
+      if (i.customer) html += '<div class="detail-row"><span>고객정보</span><span>' + escapeHtml(i.customer) + '</span></div>';
+      if (i.service) html += '<div class="detail-row"><span>서비스 품목</span><span>' + escapeHtml(i.service) + '</span></div>';
+      if (i.note) html += '<div class="detail-row"><span>비고</span><span>' + escapeHtml(i.note) + '</span></div>';
+      html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
+      html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+    } else if (i.kind === 'purchase') {
+      html += '<h3>매입 상세</h3>';
+      html += '<div class="detail-item"><div><div class="n">' + escapeHtml(i.brand + ' ' + i.model) + '</div>' +
+        '<div class="s">상태: ' + escapeHtml(i.condition) + '</div></div><div>' + won(i.price) + '</div></div>';
+      html += '<div class="detail-row"><span>임시 코드</span><span>' + escapeHtml(i.tempCode) + '</span></div>';
+      if (i.customer) html += '<div class="detail-row"><span>고객정보</span><span>' + escapeHtml(i.customer) + '</span></div>';
+      if (i.note) html += '<div class="detail-row"><span>메모</span><span>' + escapeHtml(i.note) + '</span></div>';
+      html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
+      html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+    } else if (i.kind === 'repay') {
+      html += '<h3>미수금 입금 상세</h3>';
+      html += '<div class="detail-row"><span>고객</span><span>' + escapeHtml(i.customer) + '</span></div>';
+      html += '<div class="detail-row"><span>입금액</span><span>' + won(i.amount) + '</span></div>';
+      html += '<div class="detail-row"><span>입금 수단</span><span>' + escapeHtml(i.payment || '-') + '</span></div>';
+      if (i.note) html += '<div class="detail-row"><span>비고</span><span>' + escapeHtml(i.note) + '</span></div>';
+      html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
+      html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+    } else {
+      html += '<h3>' + (i.direction === '입고' ? '입고' : '출고') + ' 상세</h3>';
+      (i.itemDetails || (i.items || []).map(n => ({ name: n }))).forEach(d => {
+        html += '<div class="detail-item"><div><div class="n">' + escapeHtml(d.name) + (d.qty > 1 ? ' ×' + d.qty : '') + '</div>' +
+          (d.spec ? '<div class="s">' + escapeHtml(d.spec) + '</div>' : '') + '</div><div></div></div>';
+      });
+      html += '<div class="detail-row"><span>거래처</span><span>' + escapeHtml(i.dest || '-') + '</span></div>';
+      if (i.note) html += '<div class="detail-row"><span>메모</span><span>' + escapeHtml(i.note) + '</span></div>';
+      html += '<div class="detail-row"><span>담당자</span><span>' + escapeHtml(i.staff || '-') + '</span></div>';
+      html += '<div class="detail-row"><span>시간</span><span>' + escapeHtml(i.time) + '</span></div>';
+    }
+    html += '<button class="detail-close" id="detailClose">닫기</button>';
+    $('#detailCard').innerHTML = html;
+    $('#detailVeil').classList.add('show');
+    $('#detailClose').addEventListener('click', closeDetail);
+  }
+  function closeDetail() { $('#detailVeil').classList.remove('show'); }
+  $('#detailVeil').addEventListener('click', (e) => { if (e.target.id === 'detailVeil') closeDetail(); });
 
   /* ============ 카메라 스캔 ============ */
   let html5QrCode = null, scanTargetInput = null, scanTargetLookup = null, scanAfterLookup = null;
